@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "jsx": "preserve",
+        "forceConsistentCasingInFileNames": true
+    },
+    "include": ["src"]
+}

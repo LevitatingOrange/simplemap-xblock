@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "simplemap-xblock"
+version = "0.1.0"
+description = "A XBlock (for the openedx eLearning platform) to show a map with configurable markers."
+authors = ["Lennart Vogelsang <lennart@vogelsang.berlin>"]
+packages = [
+    { include = "simplemap" }
+]
+include = ["simplemap/public"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+xblock = {git = "https://github.com/edx/XBlock.git", rev = "1.4.2"}
+xblock-utils = {git = "https://github.com/edx/xblock-utils.git", rev = "2.1.3"}
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.plugins."xblock.v1"]
+"simplemap" = "simplemap:SimpleMapXBlock"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
