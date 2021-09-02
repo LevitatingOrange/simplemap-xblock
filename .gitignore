@@ -2,5 +2,6 @@
 /dist/
 .backup/
 node_modules/
-
+simplemap/public/dist/
+simplemap/public/img/
 

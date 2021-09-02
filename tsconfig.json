@@ -1,9 +1,11 @@
 {
     "compilerOptions": {
+        "lib": ["es2019", "DOM"],
         "allowSyntheticDefaultImports": true,
         "strict": true,
         "jsx": "preserve",
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "downlevelIteration": true
     },
     "include": ["src"]
 }

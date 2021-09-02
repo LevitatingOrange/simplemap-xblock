@@ -1,1 +1,1 @@
-from .simplemap import SimpleMapXBlock, MapMarkerXBlock
+from .simplemap import SimpleMapXBlock 
