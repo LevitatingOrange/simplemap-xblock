@@ -9,7 +9,7 @@ packages = [
 include = ["simplemap/public"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 xblock = {git = "https://github.com/edx/XBlock.git", rev = "1.4.2"}
 xblock-utils = {git = "https://github.com/edx/xblock-utils.git", rev = "2.1.3"}
 
