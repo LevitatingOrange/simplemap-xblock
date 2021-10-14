@@ -1,107 +1,437 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, {
+    useState,
+    useMemo,
+    useRef,
+    useContext,
+    useCallback,
+    useEffect,
+} from "react";
+import { APIContext } from "./handlers";
+import { debounce } from "lodash";
 import {
-    createEditor,
-    Element as SlateElement,
-    BaseEditor,
-    Descendant,
+    FaTrashAlt,
+    FaBold,
+    FaItalic,
+    FaUnderline,
+    FaListOl,
+    FaListUl,
+    FaLink,
+    FaUnlink,
+} from "react-icons/fa";
+import { Editable, withReact, useSlate, Slate } from "slate-react";
+import {
+    LIST_TYPES,
+    BlockType,
+    MarkType,
+    html_to_editor_state,
+    editor_state_to_html,
+} from "./EditorUtil";
+import {
+    Range,
     Transforms,
+    createEditor,
+    Descendant,
+    Element as SlateElement,
+    Text as SlateText,
     Editor,
 } from "slate";
-import { useSlate, Slate, Editable, withReact, ReactEditor } from "slate-react";
-import { HistoryEditor, withHistory } from "slate-history";
-import { isHotkey } from "is-hotkey";
+import isUrl from "is-url";
+import { withHistory } from "slate-history";
+import DOMPurify from "dompurify";
 
-const HOTKEYS = {
-    "mod+b": "bold",
-    "mod+i": "italic",
-    "mod+u": "underline",
-    "mod+`": "code",
+const DEBOUNCE_TIME_MS = 3000;
+
+const withLinks = (editor: Editor) => {
+    const { insertData, insertText, isInline } = editor;
+
+    editor.isInline = (element) => {
+        return element.type === "link" ? true : isInline(element);
+    };
+
+    editor.insertText = (text) => {
+        if (text && isUrl(text)) {
+            wrapLink(editor, text);
+        } else {
+            insertText(text);
+        }
+    };
+
+    editor.insertData = (data) => {
+        const text = data.getData("text/plain");
+
+        if (text && isUrl(text)) {
+            wrapLink(editor, text);
+        } else {
+            insertData(data);
+        }
+    };
+
+    return editor;
 };
 
-export type CustomText = {
-    bold?: boolean;
-    italic?: boolean;
-    code?: boolean;
-    underline?: boolean;
-    text: string;
-};
-type ParagraphElement = { type: "paragraph"; children: Descendant[] };
-type ListItemElement = { type: "list-item"; children: Descendant[] };
-type HeadingOneElement = { type: "heading-one"; children: Descendant[] };
-type BulletedListElement = {
-    type: "bulleted-list";
-    children: Descendant[];
-};
-type NumbererdListElement = {
-    type: "numbered-list";
-    children: Descendant[];
-};
-type HeadingTwoElement = { type: "heading-two"; children: Descendant[] };
-//type CheckListItemElement = {
-//  type: 'check-list-item'
-//  checked: boolean
-//  children: Descendant[]
-//}
-type BlockQuoteElement = { type: "block-quote"; children: Descendant[] };
-type CustomElement =
-    | ParagraphElement
-    | ListItemElement
-    | BulletedListElement
-    | NumbererdListElement
-    | BlockQuoteElement
-    | HeadingOneElement
-    | HeadingTwoElement;
-
-type ElementType = CustomElement["type"];
-type TextFormat = keyof Omit<CustomText, "text">;
-
-declare module "slate" {
-    interface CustomTypes {
-        Editor: BaseEditor & ReactEditor & HistoryEditor;
-        Element: CustomElement;
-        Text: CustomText;
+const insertLink = (editor: Editor, url: string) => {
+    if (editor.selection) {
+        wrapLink(editor, url);
     }
-}
+};
 
-const LIST_TYPES = ["numbered-list", "bulleted-list"];
+const isLinkActive = (editor: Editor) => {
+    const [link] = Editor.nodes(editor, {
+        match: (n) =>
+            !Editor.isEditor(n) &&
+            SlateElement.isElement(n) &&
+            n.type === "link",
+    });
+    return !!link;
+};
 
-export default () => {
-    const editor = useMemo(() => withHistory(withReact(createEditor())), []);
-    const [value, setValue] = useState<Descendant[]>([
-        { type: "paragraph", children: [{ text: "" }] },
-    ]);
-    const renderElement = useCallback((props) => <Element {...props} />, []);
-    const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
+const getCurLink = (editor: Editor): string => {
+    let [link] = Editor.nodes(editor, {
+        match: (n) =>
+            !Editor.isEditor(n) &&
+            SlateElement.isElement(n) &&
+            n.type === "link",
+    });
+
+
+    if (link !== undefined && link !== null) {
+        return (link[0] as unknown as SlateElement).url || "";
+    } else {
+        return "";
+    }
+};
+
+const unwrapLink = (editor: Editor) => {
+    Transforms.unwrapNodes(editor, {
+        match: (n) =>
+            !Editor.isEditor(n) &&
+            SlateElement.isElement(n) &&
+            n.type === "link",
+    });
+};
+
+const wrapLink = (editor: Editor, url: string) => {
+    if (isLinkActive(editor)) {
+        unwrapLink(editor);
+    }
+
+    const { selection } = editor;
+    const isCollapsed = selection && Range.isCollapsed(selection);
+    const link: SlateElement = {
+        type: "link",
+        url,
+        children: isCollapsed ? [{ text: url }] : [],
+    };
+
+    if (isCollapsed) {
+        Transforms.insertNodes(editor, link);
+    } else {
+        Transforms.wrapNodes(editor, link, { split: true });
+        Transforms.collapse(editor, { edge: "end" });
+    }
+};
+
+const MarkButton = (props: { format: MarkType; children: any }) => {
+    const editor = useSlate();
+    // aria-label="Bold"
     return (
-        <Slate
-            editor={editor}
-            value={value}
-            onChange={(newValue) => setValue(newValue)}
+        <a
+            role="button"
+            href="#"
+            className={
+                isMarkActive(editor, props.format) ? "button-active" : ""
+            }
+            onClick={(event) => {
+                event.preventDefault();
+                toggleMark(editor, props.format);
+            }}
         >
-            <Editable
-                renderElement={renderElement}
-                renderLeaf={renderLeaf}
-                spellCheck
-                autoFocus
-                placeholder="Enter text…"
-                onKeyDown={(event) => {
-                    for (const hotkey in HOTKEYS) {
-                        if (isHotkey(hotkey, event as any)) {
-                            event.preventDefault();
-                            //TOOD: why is this so difficult for Typescript?
-                            const mark = HOTKEYS[
-                                hotkey as keyof typeof HOTKEYS
-                            ] as TextFormat;
-                            toggleMark(editor, mark);
-                        }
-                    }
-                }}
-            />
-        </Slate>
+            {props.children}
+        </a>
     );
 };
 
-const toggleBlock = (editor: Editor, format: ElementType) => {
+const BlockButton = (props: { format: BlockType; children: any }) => {
+    const editor = useSlate();
+    return (
+        <a
+            role="button"
+            href="#"
+            className={
+                isBlockActive(editor, props.format) ? "button-active" : ""
+            }
+            onClick={(event) => {
+                event.preventDefault();
+                toggleBlock(editor, props.format);
+            }}
+        >
+            {props.children}
+        </a>
+    );
+};
+
+const LinkButton = () => {
+    const editor = useSlate();
+    return (
+        <a
+            role="button"
+            href="#"
+            onClick={(event) => {
+                event.preventDefault();
+                const url = window.prompt(
+                    "Enter the URL of the link:",
+                    getCurLink(editor)
+                );
+                if (!url || url == "") return;
+                insertLink(editor, url);
+            }}
+        >
+            <FaLink />
+        </a>
+    );
+};
+
+const RemoveLinkButton = () => {
+    const editor = useSlate();
+
+    return (
+        <a
+            className={isLinkActive(editor) ? "button-active" : ""}
+            onClick={(event) => {
+                event.preventDefault();
+                if (isLinkActive(editor)) {
+                    unwrapLink(editor);
+                }
+            }}
+        >
+            <FaUnlink />
+        </a>
+    );
+};
+
+const getIntialState = (content: string) => {
+    let initialState = html_to_editor_state(content);
+    if (initialState.length === 0) {
+        initialState = [{ type: "paragraph", children: [{ text: "" }] }];
+    }
+    return initialState;
+};
+
+export default (props: {
+    marker_id: string;
+    editable: boolean;
+    title: string;
+    content: string;
+    delete_marker: (marker_id: string) => void;
+}) => {
+    const apiHandler = useContext(APIContext);
+    const [title, setTitle] = useState(props.title);
+    const debouncedTitleHandler = useMemo(
+        () =>
+            debounce(async (newTitle: string) => {
+                console.info("Sending new marker data to server...");
+                try {
+                    const response = await apiHandler.post("change_marker", {
+                        marker_id: props.marker_id,
+                        title: newTitle,
+                    });
+                    console.info(
+                        "Marker data has been accepted, response was: ",
+                        response
+                    );
+                } catch (error) {
+                    console.error("Could not push new marker data:", error);
+                }
+            }, DEBOUNCE_TIME_MS),
+        [props.marker_id]
+    );
+
+    //"<p><strong>Hello</strong> World. We like it <em><strong>here</strong></em></p>"
+    const [value, setValue] = useState<Descendant[]>(
+        getIntialState(props.content)
+    );
+    const debouncedValueHandler = useMemo(
+        () =>
+            debounce(async (value: Descendant[]) => {
+                const new_content = DOMPurify.sanitize(
+                    editor_state_to_html(value),
+                    { USE_PROFILES: { html: true } }
+                );
+                console.info("Sending new marker data to server...");
+                try {
+                    const response = await apiHandler.post("change_marker", {
+                        marker_id: props.marker_id,
+                        content: new_content,
+                    });
+                    console.info(
+                        "Marker data has been accepted, response was: ",
+                        response
+                    );
+                } catch (error) {
+                    console.error("Could not push new marker data:", error);
+                }
+            }, DEBOUNCE_TIME_MS),
+        []
+    );
+
+    // Cleanup
+    useEffect(() => {
+        return () => {
+            debouncedTitleHandler.flush();
+            debouncedValueHandler.flush();
+        };
+    }, []);
+    const renderElement = useCallback((props) => <Element {...props} />, []);
+    const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
+    const editor = useMemo(
+        () => withLinks(withHistory(withReact(createEditor()))),
+        []
+    );
+
+    // because we are paranoid
+    const safe_content = useMemo(
+        () =>
+            DOMPurify.sanitize(editor_state_to_html(value), {
+                USE_PROFILES: { html: true },
+            }),
+        [value]
+    );
+
+    if (props.editable) {
+        return (
+            <div className="popup">
+                <input
+                    className="marker-title"
+                    type="text"
+                    value={title}
+                    onChange={(event) => {
+                        setTitle(event.target.value);
+                        debouncedTitleHandler(event.target.value);
+                    }}
+                />
+
+                <Slate
+                    editor={editor}
+                    value={value}
+                    onChange={(value) => {
+                        setValue(value);
+                        debouncedValueHandler(value);
+                    }}
+                >
+                    <section className="toolbar">
+                        <BlockButton format="numbered-list">
+                            <FaListOl />
+                        </BlockButton>
+                        <BlockButton format="bulleted-list">
+                            <FaListUl />
+                        </BlockButton>
+
+                        <MarkButton format="bold">
+                            <FaBold />
+                        </MarkButton>
+                        <MarkButton format="italic">
+                            <FaItalic />
+                        </MarkButton>
+                        <MarkButton format="underline">
+                            <FaUnderline />
+                        </MarkButton>
+
+                        <LinkButton />
+                        <RemoveLinkButton />
+
+                        <a
+                            role="button"
+                            aria-label="Delete marker"
+                            href="#"
+                            className="delete-button"
+                            onClick={() => {
+                                // TODO: better use undo pattern
+                                if (
+                                    window.confirm(
+                                        "Are you sure you want to delete this marker?"
+                                    )
+                                ) {
+                                    props.delete_marker(props.marker_id);
+                                }
+                            }}
+                        >
+                            <FaTrashAlt />
+                        </a>
+                    </section>
+                    <Editable
+                        renderElement={renderElement}
+                        renderLeaf={renderLeaf}
+                        placeholder="Enter some rich text…"
+                        spellCheck
+                        autoFocus
+                        className="marker-editor-editable"
+                    />
+                </Slate>
+            </div>
+        );
+    } else {
+        return (
+            <div className="popup">
+                <h3>{title}</h3>
+                <section
+                    className="content"
+                    dangerouslySetInnerHTML={{ __html: safe_content }}
+                ></section>
+            </div>
+        );
+    }
+};
+
+const Element = (props: { attributes: any; children: any; element: any }) => {
+    switch (props.element.type) {
+        case "bulleted-list":
+            return <ul {...props.attributes}>{props.children}</ul>;
+        case "numbered-list":
+            return <ol {...props.attributes}>{props.children}</ol>;
+        case "list-item":
+            return <li {...props.attributes}>{props.children}</li>;
+        case "link":
+            return (
+                <a {...props.attributes} href={props.element.url}>
+                    {props.children}
+                </a>
+            );
+
+        default:
+            if (props.element.type !== "paragraph") {
+                console.warn("Unknown element type", props.element.type);
+            }
+            return <p {...props.attributes}>{props.children}</p>;
+    }
+};
+
+const Leaf = (props: { attributes: any; children: any; leaf: any }) => {
+    let rendered_children = props.children;
+    if (props.leaf.bold) {
+        rendered_children = <strong>{rendered_children}</strong>;
+    }
+
+    if (props.leaf.italic) {
+        rendered_children = <em>{rendered_children}</em>;
+    }
+    if (props.leaf.underline) {
+        rendered_children = <u>{rendered_children}</u>;
+    }
+
+    return <span {...props.attributes}>{rendered_children}</span>;
+};
+
+const toggleMark = (editor: Editor, format: MarkType) => {
+    const isActive = isMarkActive(editor, format);
+
+    if (isActive) {
+        Editor.removeMark(editor, format);
+    } else {
+        Editor.addMark(editor, format, true);
+    }
+};
+
+const toggleBlock = (editor: Editor, format: BlockType) => {
     const isActive = isBlockActive(editor, format);
     const isList = LIST_TYPES.includes(format);
 
@@ -123,17 +453,12 @@ const toggleBlock = (editor: Editor, format: ElementType) => {
     }
 };
 
-const toggleMark = (editor: Editor, format: TextFormat) => {
-    const isActive = isMarkActive(editor, format);
-
-    if (isActive) {
-        Editor.removeMark(editor, format);
-    } else {
-        Editor.addMark(editor, format, true);
-    }
+const isMarkActive = (editor: Editor, format: MarkType) => {
+    const marks = Editor.marks(editor) as any;
+    return marks ? (marks[format] as any) === true : false;
 };
 
-const isBlockActive = (editor: Editor, format: ElementType) => {
+const isBlockActive = (editor: Editor, format: BlockType) => {
     const [match] = Editor.nodes(editor, {
         match: (n) =>
             !Editor.isEditor(n) &&
@@ -142,66 +467,4 @@ const isBlockActive = (editor: Editor, format: ElementType) => {
     });
 
     return !!match;
-};
-
-const isMarkActive = (editor: Editor, format: TextFormat) => {
-    const marks = Editor.marks(editor);
-    return marks ? marks[format] === true : false;
-};
-
-const Element = (props: {
-    attributes: any;
-    element: CustomElement;
-    children: any;
-}) => {
-    switch (props.element.type) {
-        case "block-quote":
-            return (
-                <blockquote {...props.attributes}>{props.children}</blockquote>
-            );
-        case "bulleted-list":
-            return <ul {...props.attributes}>{props.children}</ul>;
-        case "heading-one":
-            return <h1 {...props.attributes}>{props.children}</h1>;
-        case "heading-two":
-            return <h2 {...props.attributes}>{props.children}</h2>;
-        case "list-item":
-            return <li {...props.attributes}>{props.children}</li>;
-        case "numbered-list":
-            return <ol {...props.attributes}>{props.children}</ol>;
-        case "paragraph":
-            return <p {...props.attributes}>{props.children}</p>;
-        default:
-            console.warn(
-                `Rendering unknown element ${props.element}, defaulting to <p></p>`
-            );
-            return <p {...props.attributes}>{props.children}</p>;
-    }
-};
-
-const Leaf = (props: { attributes: any; leaf: CustomText; children: any }) => {
-    if (props.leaf.bold) {
-        props.children = <strong>{props.children}</strong>;
-    }
-
-    if (props.leaf.code) {
-        props.children = <code>{props.children}</code>;
-    }
-
-    if (props.leaf.italic) {
-        props.children = <em>{props.children}</em>;
-    }
-
-    if (props.leaf.underline) {
-        props.children = <u>{props.children}</u>;
-    }
-    return <span {...props.attributes}>{props.children}</span>;
-};
-
-const EditorButton = (props: { active: boolean; icon; tooltip: string }) => {
-    let className = "editor-button";
-    if (props.active) {
-        className += " active";
-    }
-    return <span className={className}></span>;
 };

@@ -41,6 +41,7 @@ class SimpleMapXBlock(XBlock):
     zoom = Float(help=_("Initial zoom level"), scope=Scope.content, default=12.0)
     markers = Dict(help=_("Markers"), scope=Scope.content, default={}) 
     has_children = True
+    #has_author_view = True
 
     def resource_string(self, path):
         """Handy helper for getting resources from our kit."""
@@ -65,9 +66,10 @@ class SimpleMapXBlock(XBlock):
         The primary view of the SimpleMapXBlock, shown to students
         when viewing courses.
         """
+        return self.make_view(False, context=context)
+
+    def studio_view(self, context=None):
         return self.make_view(True, context=context)
-
-
 
     @XBlock.json_handler
     def change_marker(self, data, suffix=''):
@@ -163,7 +165,6 @@ class SimpleMapXBlock(XBlock):
             ("SimpleMapXBlock",
              """<simplemap lat="52.520008" long="13.404954" zoom="12">
                  <mapmarker id="1b0cd004-8702-4411-a889-ca97afaf0d39" title="Bundestag" lat="52.518623" long="13.376198">
-                    Hello <b>World</b>
                  </mapmarker>
                  <mapmarker id="f97b2a72-846c-4967-8480-6eab073665fd" title="Charite" lat="52.522664576" long="13.374498502">
                  </mapmarker>

@@ -33,7 +33,7 @@
 }
 
 .toolbar a {
-    line-height: 1.0;
+    line-height: 1;
     font-size: 12px;
     color: #000;
     border-right: 1px solid #ccc;
@@ -47,6 +47,11 @@
     color: #ff0000 !important;
 }
 
+.toolbar .button-active {
+    background-color: #ccc;
+    border-right: 1px solid #fff;
+}
+
 .marker-button,
 .active {
     color: #000;
@@ -55,4 +60,29 @@
 .additional-map-controls {
     display: flex;
     flex-direction: column;
+}
+
+.marker-editor-editable {
+    min-height: 17px !important;
+}
+
+.popup {
+    max-width: 250px;
+}
+
+.popup ol {
+    padding-left: 10px;
+}
+
+.popup ul {
+    padding-left: 10px;
+}
+
+.popup h3 {
+    margin-bottom: 7px;
+}
+
+.popup p {
+    margin-top: 12px;
+    margin-bottom: 12px;
 }

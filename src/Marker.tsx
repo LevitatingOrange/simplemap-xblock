@@ -1,10 +1,8 @@
 import { LatLng, Marker as LMarker } from "leaflet";
 import React, { useState, useMemo, useRef, useContext } from "react";
 import { Marker, Popup } from "react-leaflet";
-import APIHandler, { APIContext } from "./handlers";
+import { APIContext } from "./handlers";
 import MarkerEditor from "./MarkerEditor";
-import { debounce } from "lodash";
-import { FaTrashAlt, FaBold, FaItalic } from "react-icons/fa";
 
 export interface MarkerData {
     title: string;
@@ -12,97 +10,6 @@ export interface MarkerData {
     lat: number;
     long: number;
 }
-
-const PopupEditor = (props: {
-    marker_id: string;
-    editable: boolean;
-    title: string;
-    content: string;
-    delete_marker: (marker_id: string) => void;
-}) => {
-    const apiHandler = useContext(APIContext);
-    const [title, setTitle] = useState(props.title);
-    const debouncedTitleHandler = useMemo(
-        () =>
-            debounce(async (newTitle: string) => {
-                console.info("Sending new marker data to server...");
-                try {
-                    const response = await apiHandler.post("change_marker", {
-                        marker_id: props.marker_id,
-                        title: newTitle,
-                    });
-                    console.info(
-                        "Marker data has been accepted, response was: ",
-                        response
-                    );
-                } catch (error) {
-                    console.error("Could not push new marker data:", error);
-                }
-            }, 1000),
-        [props.marker_id]
-    );
-
-    if (props.editable) {
-        return (
-            <div className="popup">
-                    <input
-                        className="marker-title"
-                        type="text"
-                        value={title}
-                        onChange={(event) => {
-                            setTitle(event.target.value);
-                            debouncedTitleHandler(event.target.value);
-                        }}
-                    />
-
-                <section className="toolbar">
-                      <a
-                        role="button"
-                        aria-label="Bold"
-                        href="#"
-                        onClick={() => {}}
-                    >
-                        <FaBold />
-                    </a>
-                    <a
-                        role="button"
-                        aria-label="Italics"
-                        href="#"
-                        onClick={() => {}}
-                    >
-                        <FaItalic />
-                    </a>
-                    <a
-                        role="button"
-                        aria-label="Delete marker"
-                        href="#"
-                        className="delete-button"
-                        onClick={() => {
-                            // TODO: better use undo pattern
-                            if (
-                                window.confirm(
-                                    "Are you sure you want to delete this marker?"
-                                )
-                            ) {
-                                props.delete_marker(props.marker_id);
-                            }
-                        }}
-                    >
-                        <FaTrashAlt />
-                    </a>
-                </section>
-            </div>
-        );
-        //return <MarkerEditor />;
-    } else {
-        return (
-            <div className="popup">
-                <h3>{title}</h3>
-                <section className="content">{props.content}</section>
-            </div>
-        );
-    }
-};
 
 export default (
     props: {
@@ -153,7 +60,7 @@ export default (
             ref={markerRef}
         >
             <Popup>
-                <PopupEditor
+                <MarkerEditor
                     marker_id={props.marker_id}
                     title={props.title}
                     content={props.content}
